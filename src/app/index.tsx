@@ -1,98 +1,129 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Button,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { getCurrentWifiRssi } from "../features/wifi/wifiService";
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+export default function Index() {
+  const [rssi, setRssi] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+  const [readCount, setReadCount] = useState(0);
+  const [lastReadTime, setLastReadTime] = useState<string | null>(null);
+
+  const measureSignal = useCallback(async (): Promise<boolean> => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const value = await getCurrentWifiRssi();
+
+      setRssi(value);
+      setReadCount((count) => count + 1);
+      setLastReadTime(new Date().toLocaleTimeString("pl-PL"));
+
+      return true;
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Wystąpił nieznany błąd."
+      );
+
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!running) return;
+
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    async function tick() {
+      const success = await measureSignal();
+
+      if (stopped) return;
+
+      if (!success) {
+        setRunning(false);
+        return;
+      }
+
+      timer = setTimeout(tick, 1000);
+    }
+
+    void tick();
+
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [running, measureSignal]);
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+    <View style={styles.container}>
+      <Text style={styles.title}>WiFi Mapper</Text>
 
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+      <Text style={styles.value}>
+        {rssi === null ? "—" : `${rssi} dBm`}
+      </Text>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+      <Text>{running ? "🟢 Odczyt automatyczny" : "⚪ Odczyt zatrzymany"}</Text>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+      <Button
+        title="Zmierz raz"
+        disabled={running || loading}
+        onPress={() => {
+          void measureSignal();
+        }}
+      />
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+      <Button
+        title={running ? "Stop" : "Start"}
+        disabled={loading && !running}
+        onPress={() => setRunning((current) => !current)}
+      />
+
+      <View style={styles.indicator}>
+        <Text>Udane odczyty: {readCount}</Text>
+        <Text>Ostatni odczyt: {lastReadTime ?? "—"}</Text>
+        {loading && <ActivityIndicator />}
+      </View>
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+    gap: 20,
   },
   title: {
-    textAlign: 'center',
+    fontSize: 30,
+    fontWeight: "bold",
   },
-  code: {
-    textTransform: 'uppercase',
+  value: {
+    fontSize: 42,
+    fontWeight: "bold",
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  indicator: {
+    alignItems: "center",
+    gap: 8,
+  },
+  error: {
+    color: "red",
+    textAlign: "center",
   },
 });
