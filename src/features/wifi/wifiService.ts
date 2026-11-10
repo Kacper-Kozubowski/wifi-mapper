@@ -1,11 +1,7 @@
-import { PermissionsAndroid, Platform } from "react-native";
+import { PermissionsAndroid } from "react-native";
 import WifiManager from "react-native-wifi-reborn";
 
 export async function getCurrentWifiRssi(): Promise<number> {
-  if (Platform.OS !== "android") {
-    throw new Error("Pomiar jest obecnie dostępny tylko na Androidzie.");
-  }
-
   const permission = PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION;
   const alreadyGranted = await PermissionsAndroid.check(permission);
 

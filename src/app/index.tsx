@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import {
   ActivityIndicator,
   Button,
@@ -16,6 +17,10 @@ export default function Index() {
 
   const [readCount, setReadCount] = useState(0);
   const [lastReadTime, setLastReadTime] = useState<string | null>(null);
+
+  useFocusEffect(useCallback(() => {
+    return () => setRunning(false);
+  }, []));
 
   const measureSignal = useCallback(async (): Promise<boolean> => {
     setLoading(true);
